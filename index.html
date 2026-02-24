@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cluster Chicken - Ubidots</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; color: #2c3e50; }
+
+  .header {
+    background: linear-gradient(135deg, #2c3e50, #3498db);
+    color: white; padding: 24px; text-align: center;
+  }
+  .header h1 { font-size: 26px; margin-bottom: 4px; }
+  .header p { opacity: 0.8; font-size: 14px; }
+
+  /* --- Fetch panel --- */
+  .fetch-panel {
+    max-width: 800px; margin: 24px auto; background: white;
+    border-radius: 12px; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  }
+  .fetch-panel h2 { font-size: 18px; margin-bottom: 16px; color: #2c3e50; }
+  .fetch-row {
+    display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;
+  }
+  .fetch-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px; }
+  .fetch-group label { font-size: 12px; font-weight: 600; color: #666; text-transform: uppercase; }
+  .fetch-group input {
+    padding: 10px 12px; border: 1px solid #ccc; border-radius: 6px;
+    font-size: 14px; background: white;
+  }
+  .fetch-group input:focus { outline: none; border-color: #3498db; box-shadow: 0 0 0 3px rgba(52,152,219,0.15); }
+  .btn {
+    padding: 10px 24px; border-radius: 6px; font-size: 14px;
+    border: none; cursor: pointer; font-weight: 600; transition: all 0.2s;
+  }
+  .btn-fetch { background: #3498db; color: white; min-width: 150px; height: 42px; }
+  .btn-fetch:hover { background: #2980b9; }
+  .btn-fetch:disabled { background: #95a5a6; cursor: not-allowed; }
+  .token-note { font-size: 11px; color: #999; margin-top: 8px; }
+  .progress-bar {
+    display: none; margin-top: 16px; background: #ecf0f1; border-radius: 6px; overflow: hidden; height: 24px;
+  }
+  .progress-fill {
+    height: 100%; background: linear-gradient(90deg, #2ecc71, #3498db);
+    transition: width 0.3s; display: flex; align-items: center; justify-content: center;
+    font-size: 12px; color: white; font-weight: 600; min-width: 40px;
+  }
+  .error-msg { color: #e74c3c; margin-top: 10px; font-size: 13px; display: none; }
+
+  /* --- App (hidden until data loaded) --- */
+  #app { display: none; }
+  .controls {
+    display: flex; gap: 20px; padding: 16px 24px;
+    background: white; border-bottom: 1px solid #ddd;
+    align-items: center; flex-wrap: wrap;
+  }
+  .control-group { display: flex; flex-direction: column; gap: 4px; }
+  .control-group label { font-size: 12px; font-weight: 600; color: #666; text-transform: uppercase; }
+  .control-group select, .control-group input {
+    padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px;
+    font-size: 14px; background: white;
+  }
+  .day-chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .day-chip, .device-chip {
+    padding: 6px 14px; border-radius: 20px; font-size: 13px;
+    border: 2px solid #3498db; background: white; color: #3498db;
+    cursor: pointer; transition: all 0.2s; user-select: none;
+  }
+  .day-chip.active, .device-chip.active { background: #3498db; color: white; }
+  .day-chip:hover, .device-chip:hover { background: #ebf5fb; }
+  .day-chip.active:hover, .device-chip.active:hover { background: #2980b9; }
+  .device-chip { border-color: #e67e22; color: #e67e22; }
+  .device-chip.active { background: #e67e22; color: white; }
+  .device-chip:hover { background: #fef5ec; }
+  .device-chip.active:hover { background: #d35400; }
+  .tara-control { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .tara-control input[type=number] { width: 70px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; }
+  .tara-control .tara-median { font-size: 12px; color: #888; }
+  .btn-tara { background: #7f8c8d; color: white; font-size: 12px; padding: 6px 12px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; }
+  .btn-tara:hover { background: #636e72; }
+  .btn-primary { background: #2ecc71; color: white; }
+  .btn-primary:hover { background: #27ae60; }
+  .btn-all { background: #ecf0f1; color: #2c3e50; font-size: 12px; padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer; }
+  .btn-all:hover { background: #bdc3c7; }
+  .btn-new { background: #e74c3c; color: white; font-size: 12px; }
+  .btn-new:hover { background: #c0392b; }
+  .stats {
+    display: flex; gap: 12px; padding: 12px 24px;
+    background: #fafafa; border-bottom: 1px solid #eee; flex-wrap: wrap;
+  }
+  .stat-card {
+    padding: 10px 16px; border-radius: 8px; background: white;
+    border-left: 4px solid; font-size: 13px; line-height: 1.6;
+  }
+  .stat-card .stat-row { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: #555; }
+  .stat-card .stat-row span { white-space: nowrap; }
+  #chart { width: 100%; height: calc(100vh - 300px); min-height: 500px; }
+  #image-tooltip {
+    display: none; position: fixed; z-index: 9999;
+    background: white; border: 2px solid #333; border-radius: 10px;
+    padding: 10px; box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+    pointer-events: none; max-width: 360px;
+  }
+  #image-tooltip img { width: 340px; height: auto; border-radius: 6px; display: block; }
+  #image-tooltip .tw { font-size: 18px; font-weight: bold; color: #2c3e50; text-align: center; margin-top: 8px; }
+  #image-tooltip .ti { font-size: 12px; color: #888; text-align: center; margin-top: 2px; }
+  .loading {
+    display: none; position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%); background: rgba(0,0,0,0.7);
+    color: white; padding: 20px 40px; border-radius: 10px;
+    font-size: 16px; z-index: 10000;
+  }
+  @media (max-width: 768px) {
+    .header h1 { font-size: 20px; }
+    .fetch-row { flex-direction: column; }
+    .fetch-group { min-width: 100%; }
+    .controls { flex-direction: column; padding: 12px 16px; gap: 12px; }
+    .stats { flex-direction: column; padding: 8px 16px; }
+    #chart { height: 60vh; min-height: 350px; }
+    #image-tooltip { max-width: 220px; }
+    #image-tooltip img { width: 200px; }
+    .tara-control { flex-wrap: wrap; }
+    .hwe-table { font-size: 11px; }
+    .hwe-table th, .hwe-table td { padding: 4px 6px; }
+  }
+  .hwe-section {
+    padding: 24px; background: white; border-top: 3px solid #3498db;
+    margin-top: 8px; display: none;
+  }
+  .hwe-section h2 { font-size: 20px; color: #2c3e50; margin-bottom: 16px; }
+  #growthChart { width: 100%; height: 400px; }
+  .hwe-table {
+    width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px;
+  }
+  .hwe-table th {
+    background: #2c3e50; color: white; padding: 8px 12px; text-align: left;
+  }
+  .hwe-table td { padding: 6px 12px; border-bottom: 1px solid #eee; }
+  .hwe-table tr:hover { background: #f8f9fa; }
+  .quality-badge {
+    display: inline-block; padding: 2px 10px; border-radius: 12px;
+    font-size: 11px; font-weight: 600; color: white;
+  }
+  .q-alta { background: #2ecc71; }
+  .q-media { background: #f39c12; }
+  .q-baja { background: #e74c3c; }
+  .q-insuficiente { background: #95a5a6; }
+  .btn-hwe { background: #8e44ad; color: white; }
+  .btn-hwe:hover { background: #7d3c98; }
+  .error-section {
+    padding: 24px; background: white; border-top: 3px solid #e67e22;
+    margin-top: 8px; display: none;
+  }
+  .error-section h2 { font-size: 20px; color: #2c3e50; margin-bottom: 16px; }
+  .error-section h3 { font-size: 16px; color: #34495e; margin: 20px 0 12px; }
+  .quality-legend {
+    background: #f8f9fa; border-radius: 8px; padding: 16px; margin-bottom: 20px;
+    border: 1px solid #e0e0e0;
+  }
+  .quality-legend .ql-row {
+    display: flex; align-items: center; gap: 12px; padding: 4px 0; font-size: 13px;
+  }
+  .quality-legend .ql-row .quality-badge { min-width: 90px; text-align: center; }
+  #empiricalChart { width: 100%; height: 400px; }
+  .global-stats {
+    display: flex; gap: 16px; flex-wrap: wrap; margin-top: 16px;
+  }
+  .global-stat-card {
+    flex: 1; min-width: 180px; padding: 14px; border-radius: 8px;
+    background: #f8f9fa; border: 1px solid #e0e0e0; font-size: 13px;
+  }
+  .global-stat-card b { display: block; margin-bottom: 6px; color: #2c3e50; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Cluster Chicken - Ubidots</h1>
+  <p>Visualización interactiva de peso de pollos con clustering</p>
+</div>
+
+<!-- FETCH PANEL -->
+<div class="fetch-panel" id="fetchPanel">
+  <h2>Conectar a Ubidots</h2>
+  <div class="fetch-row">
+    <div class="fetch-group" style="flex:2">
+      <label>Token de Ubidots</label>
+      <input type="password" id="inputToken" placeholder="BBUS-xxxxxxxxxxxx">
+    </div>
+    <div class="fetch-group">
+      <label>Fecha inicio</label>
+      <input type="date" id="inputStart" value="2026-02-19">
+    </div>
+    <div class="fetch-group">
+      <label>Fecha fin</label>
+      <input type="date" id="inputEnd" value="2026-02-24">
+    </div>
+    <div class="fetch-group" style="flex:0">
+      <label>&nbsp;</label>
+      <button class="btn btn-fetch" id="btnFetch" onclick="fetchData()">Traer datos</button>
+    </div>
+  </div>
+  <p class="token-note">Tu token se usa solo en tu navegador para consultar la API de Ubidots. No se almacena ni se envía a ningún servidor.</p>
+  <div class="progress-bar" id="progressBar">
+    <div class="progress-fill" id="progressFill" style="width:0%">0%</div>
+  </div>
+  <p class="error-msg" id="errorMsg"></p>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="controls">
+    <div class="control-group">
+      <label>Rango tara (g)</label>
+      <div class="tara-control">
+        <span>Mín:</span>
+        <input type="number" id="taraMin" value="-50" step="1">
+        <span>Máx:</span>
+        <input type="number" id="taraMax" value="30" step="1">
+        <button class="btn-tara" onclick="adjustTara()">Ajustar tara</button>
+        <span class="tara-median" id="taraMedian"></span>
+      </div>
+    </div>
+    <div class="control-group">
+      <label>Básculas <button class="btn-all" onclick="toggleAllDevices()">Todas / Ninguna</button></label>
+      <div class="day-chips" id="deviceChips"></div>
+    </div>
+    <div class="control-group">
+      <label>Inicio del lote</label>
+      <input type="date" id="flockStart" onchange="buildDayChips(); updateChart()">
+    </div>
+    <div class="control-group">
+      <label>Días <button class="btn-all" onclick="toggleAllDays()">Todos / Ninguno</button></label>
+      <div class="day-chips" id="dayChips"></div>
+    </div>
+    <div class="control-group" style="justify-content:flex-end">
+      <label>&nbsp;</label>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="updateChart()">Actualizar</button>
+        <button class="btn btn-new" onclick="resetApp()">Nueva consulta</button>
+      </div>
+    </div>
+  </div>
+  <div class="stats" id="statsBar"></div>
+  <div id="chart"></div>
+  <div class="hwe-section" id="hweSection">
+    <h2>Curva de Crecimiento - Estimación Armónica de Peso (HWE)</h2>
+    <div id="growthChart"></div>
+    <div id="hweTable"></div>
+  </div>
+  <div class="error-section" id="errorSection">
+    <h2>Análisis de Error - HWE</h2>
+    <div class="quality-legend">
+      <div class="ql-row"><span class="quality-badge q-alta">alta</span> R² ≥ 0.85, score &lt; 0.10 — Excelente ajuste armónico</div>
+      <div class="ql-row"><span class="quality-badge q-media">media</span> R² ≥ 0.70, score &lt; 0.20 — Buena estimación con ruido</div>
+      <div class="ql-row"><span class="quality-badge q-baja">baja</span> R² ≥ 0.50 — Modelo se ajusta pobremente</div>
+      <div class="ql-row"><span class="quality-badge q-insuficiente">insuficiente</span> R² &lt; 0.50 — Datos insuficientes</div>
+    </div>
+    <h3>Error por nivel por día</h3>
+    <div id="errorTable"></div>
+    <h3>Empírico vs Teórico</h3>
+    <div id="empiricalChart"></div>
+    <h3>Estadísticas globales</h3>
+    <div class="global-stats" id="globalStats"></div>
+  </div>
+</div>
+
+<div id="image-tooltip">
+  <img id="tooltip-img" src="">
+  <div class="tw" id="tooltip-weight"></div>
+  <div class="ti" id="tooltip-info"></div>
+</div>
+<div class="loading" id="loading">Calculando clusters...</div>
+
+<script>
+var ALL_DATA = [];
+var ALL_DAYS = [];
+var ALL_DEVICES_LIST = [];
+var COLORS = ['#2ecc71','#3498db','#e74c3c','#f39c12','#9b59b6','#1abc9c','#e67e22','#8e44ad','#2c3e50','#d35400'];
+var selectedDays = new Set();
+var selectedDevices = new Set();
+
+var DEVICES = {
+  "SW-D9F0-C39": "default-0000000017add9f0-smartweight",
+  "SW-F84E-C36": "default-66753e39305af84e-smartweight",
+  "SW-54DC-C33": "default-0b890d7d368454dc-smartweight",
+  "SW-76AF-C30": "default-914e84f8efb876af-smartweight"
+};
+var BASE_URL = "https://industrial.api.ubidots.com";
+
+// --- Ubidots API fetch ---
+function dateToMs(dateStr) {
+  return new Date(dateStr + "T00:00:00Z").getTime();
+}
+
+async function getValues(token, deviceLabel, varLabel, startMs, endMs) {
+  var all = [];
+  var url = BASE_URL + "/api/v1.6/devices/" + deviceLabel + "/" + varLabel + "/values?page_size=1000&start=" + startMs + "&end=" + endMs;
+  while (url) {
+    var resp = await fetch(url, { headers: { "X-Auth-Token": token } });
+    if (!resp.ok) throw new Error("Error API: " + resp.status + " " + resp.statusText);
+    var data = await resp.json();
+    all = all.concat(data.results || []);
+    url = data.next || null;
+  }
+  return all;
+}
+
+function extractImageUrl(context) {
+  if (!context) return "";
+  if (typeof context === "object") return context.image_url || "";
+  if (typeof context === "string") {
+    try { var d = JSON.parse(context.replace(/'/g, '"')); return d.image_url || ""; }
+    catch(e) { return ""; }
+  }
+  return "";
+}
+
+async function fetchData() {
+  var token = document.getElementById('inputToken').value.trim();
+  var startDate = document.getElementById('inputStart').value;
+  var endDate = document.getElementById('inputEnd').value;
+  var errorEl = document.getElementById('errorMsg');
+  errorEl.style.display = 'none';
+
+  if (!token) { errorEl.textContent = "Ingresa tu token de Ubidots"; errorEl.style.display = 'block'; return; }
+  if (!startDate || !endDate) { errorEl.textContent = "Selecciona las fechas"; errorEl.style.display = 'block'; return; }
+
+  var btn = document.getElementById('btnFetch');
+  btn.disabled = true; btn.textContent = "Descargando...";
+  var progressBar = document.getElementById('progressBar');
+  var progressFill = document.getElementById('progressFill');
+  progressBar.style.display = 'block';
+
+  var startMs = dateToMs(startDate);
+  var endMs = dateToMs(endDate);
+  var deviceKeys = Object.keys(DEVICES);
+  var allRecords = [];
+
+  try {
+    for (var i = 0; i < deviceKeys.length; i++) {
+      var name = deviceKeys[i];
+      var label = DEVICES[name];
+      var pct = Math.round((i / deviceKeys.length) * 100);
+      progressFill.style.width = pct + "%";
+      progressFill.textContent = "Descargando " + name + "...";
+
+      try {
+        var values = await getValues(token, label, "peso", startMs, endMs);
+        for (var j = 0; j < values.length; j++) {
+          var v = values[j];
+          var dt = new Date(v.timestamp);
+          var dtStr = dt.toISOString().replace("T", " ").substring(0, 19);
+          var dayStr = dt.toISOString().substring(0, 10);
+          allRecords.push({
+            v: Math.round(v.value * 100) / 100,
+            d: name,
+            dt: dtStr,
+            day: dayStr,
+            img: extractImageUrl(v.context)
+          });
+        }
+      } catch(e) {
+        console.warn("Error descargando " + name + ":", e);
+      }
+    }
+
+    progressFill.style.width = "100%";
+    progressFill.textContent = allRecords.length + " registros descargados";
+
+    if (allRecords.length === 0) {
+      errorEl.textContent = "No se encontraron datos en el rango seleccionado. Verifica el token y las fechas.";
+      errorEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = "Traer datos";
+      progressBar.style.display = 'none';
+      return;
+    }
+
+    // Sort by datetime
+    allRecords.sort(function(a, b) { return a.dt < b.dt ? -1 : a.dt > b.dt ? 1 : 0; });
+
+    ALL_DATA = allRecords;
+    ALL_DAYS = [...new Set(allRecords.map(function(r) { return r.day; }))].sort();
+    ALL_DEVICES_LIST = [...new Set(allRecords.map(function(r) { return r.d; }))].sort();
+    selectedDays = new Set(ALL_DAYS);
+    selectedDevices = new Set(ALL_DEVICES_LIST);
+
+    // Show app
+    setTimeout(function() {
+      document.getElementById('fetchPanel').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      document.getElementById('flockStart').value = ALL_DAYS[0];
+      buildDeviceChips();
+      buildDayChips();
+      updateChart();
+    }, 500);
+
+  } catch(e) {
+    errorEl.textContent = "Error: " + e.message;
+    errorEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = "Traer datos";
+    progressBar.style.display = 'none';
+  }
+}
+
+function resetApp() {
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('fetchPanel').style.display = 'block';
+  var btn = document.getElementById('btnFetch');
+  btn.disabled = false; btn.textContent = "Traer datos";
+  document.getElementById('progressBar').style.display = 'none';
+  ALL_DATA = []; ALL_DAYS = [];
+  Plotly.purge('chart');
+}
+
+// --- Day chips ---
+function getDayNumber(dateStr, flockStartStr) {
+  var d = new Date(dateStr + 'T00:00:00Z');
+  var s = new Date(flockStartStr + 'T00:00:00Z');
+  return Math.floor((d - s) / 86400000) + 1;
+}
+
+function buildDayChips() {
+  var container = document.getElementById('dayChips');
+  container.innerHTML = '';
+  var flockStart = document.getElementById('flockStart').value || ALL_DAYS[0];
+  ALL_DAYS.forEach(function(day) {
+    var dayNum = getDayNumber(day, flockStart);
+    var chip = document.createElement('span');
+    chip.className = 'day-chip' + (selectedDays.has(day) ? ' active' : '');
+    chip.textContent = 'Día ' + dayNum;
+    chip.title = day;
+    chip.dataset.day = day;
+    chip.onclick = function() {
+      if (selectedDays.has(day)) { selectedDays.delete(day); chip.classList.remove('active'); }
+      else { selectedDays.add(day); chip.classList.add('active'); }
+    };
+    container.appendChild(chip);
+  });
+}
+
+function buildDeviceChips() {
+  var container = document.getElementById('deviceChips');
+  container.innerHTML = '';
+  ALL_DEVICES_LIST.forEach(function(dev) {
+    var chip = document.createElement('span');
+    chip.className = 'device-chip active';
+    chip.textContent = dev;
+    chip.dataset.device = dev;
+    chip.onclick = function() {
+      if (selectedDevices.has(dev)) { selectedDevices.delete(dev); chip.classList.remove('active'); }
+      else { selectedDevices.add(dev); chip.classList.add('active'); }
+    };
+    container.appendChild(chip);
+  });
+}
+
+function toggleAllDevices() {
+  var chips = document.querySelectorAll('.device-chip');
+  if (selectedDevices.size === ALL_DEVICES_LIST.length) {
+    selectedDevices.clear();
+    chips.forEach(function(c) { c.classList.remove('active'); });
+  } else {
+    ALL_DEVICES_LIST.forEach(function(d) { selectedDevices.add(d); });
+    chips.forEach(function(c) { c.classList.add('active'); });
+  }
+}
+
+function toggleAllDays() {
+  if (selectedDays.size === ALL_DAYS.length) {
+    selectedDays.clear();
+  } else {
+    ALL_DAYS.forEach(function(d) { selectedDays.add(d); });
+  }
+  buildDayChips();
+}
+
+// --- Stats helpers ---
+function calcStats(vals) {
+  var n = vals.length;
+  var sum = 0; for (var i = 0; i < n; i++) sum += vals[i];
+  var mean = sum / n;
+  var sorted = vals.slice().sort(function(a,b) { return a - b; });
+  var median = n % 2 === 0 ? (sorted[n/2 - 1] + sorted[n/2]) / 2 : sorted[Math.floor(n/2)];
+  var sqSum = 0; for (var i = 0; i < n; i++) sqSum += (vals[i] - mean) * (vals[i] - mean);
+  var variance = sqSum / n;
+  var std = Math.sqrt(variance);
+  return { mean: mean, median: median, variance: variance, std: std, min: sorted[0], max: sorted[n-1] };
+}
+
+// --- HWE: Harmonic Weight Estimation ---
+function hweGridSearchW(values, nGrid, wMin, wMax, nMaxCap) {
+  nGrid = nGrid || 500; wMin = wMin || 20; wMax = wMax || 500; nMaxCap = nMaxCap || 10;
+  var step = (wMax - wMin) / nGrid;
+  var bestW = wMin, bestHssr = Infinity;
+  for (var wi = 0; wi < nGrid; wi++) {
+    var wCand = wMin + wi * step;
+    var hssr = 0;
+    for (var i = 0; i < values.length; i++) {
+      var n = Math.max(1, Math.min(nMaxCap, Math.round(values[i] / wCand)));
+      var r = values[i] - n * wCand;
+      hssr += r * r;
+    }
+    if (hssr < bestHssr) { bestHssr = hssr; bestW = wCand; }
+  }
+  return bestW;
+}
+
+function hweIHO(values, wInit, nMaxCap, maxIter, tol) {
+  nMaxCap = nMaxCap || 10; maxIter = maxIter || 50; tol = tol || 0.01;
+  var w = wInit;
+  var assignments = new Array(values.length);
+  for (var iter = 0; iter < maxIter; iter++) {
+    // E-step
+    for (var i = 0; i < values.length; i++) {
+      assignments[i] = Math.max(1, Math.min(nMaxCap, Math.round(values[i] / w)));
+    }
+    // M-step
+    var num = 0, den = 0;
+    for (var i = 0; i < values.length; i++) {
+      num += assignments[i] * values[i];
+      den += assignments[i] * assignments[i];
+    }
+    var wNew = num / den;
+    if (Math.abs(wNew - w) < tol) { w = wNew; break; }
+    w = wNew;
+  }
+  // Final assignments
+  for (var i = 0; i < values.length; i++) {
+    assignments[i] = Math.max(1, Math.min(nMaxCap, Math.round(values[i] / w)));
+  }
+  return { w: w, assignments: assignments };
+}
+
+function hweDetermineNMax(values, wInit, maxN) {
+  maxN = maxN || 10;
+  var bestNMax = 1, prevHssr = Infinity;
+  for (var nMax = 1; nMax <= maxN; nMax++) {
+    var res = hweIHO(values, wInit, nMax);
+    var hssr = 0;
+    for (var i = 0; i < values.length; i++) {
+      var r = values[i] - res.assignments[i] * res.w;
+      hssr += r * r;
+    }
+    var countAtLevel = 0;
+    for (var i = 0; i < res.assignments.length; i++) {
+      if (res.assignments[i] === nMax) countAtLevel++;
+    }
+    if (nMax > 1 && countAtLevel / values.length < 0.01) break;
+    var improvement = prevHssr > 0 ? (prevHssr - hssr) / prevHssr : 1;
+    if (nMax > 1 && improvement < 0.05) break;
+    bestNMax = nMax;
+    prevHssr = hssr;
+  }
+  return bestNMax;
+}
+
+function hweDetectOutliers(values, assignments, w, threshold) {
+  threshold = threshold || 3.0;
+  var inlier = new Array(values.length).fill(true);
+  var maxN = 0;
+  for (var i = 0; i < assignments.length; i++) {
+    if (assignments[i] > maxN) maxN = assignments[i];
+  }
+  for (var n = 1; n <= maxN; n++) {
+    var groupIdx = [];
+    for (var i = 0; i < values.length; i++) {
+      if (assignments[i] === n) groupIdx.push(i);
+    }
+    if (groupIdx.length < 3) continue;
+    var residuals = groupIdx.map(function(i) { return values[i] - n * w; });
+    var sortedR = residuals.slice().sort(function(a,b) { return a - b; });
+    var medR = sortedR.length % 2 === 0 ? (sortedR[sortedR.length/2-1] + sortedR[sortedR.length/2])/2 : sortedR[Math.floor(sortedR.length/2)];
+    var absDevs = residuals.map(function(r) { return Math.abs(r - medR); });
+    var sortedAbsDevs = absDevs.slice().sort(function(a,b) { return a - b; });
+    var mad = sortedAbsDevs.length % 2 === 0 ? (sortedAbsDevs[sortedAbsDevs.length/2-1] + sortedAbsDevs[sortedAbsDevs.length/2])/2 : sortedAbsDevs[Math.floor(sortedAbsDevs.length/2)];
+    if (mad < 1e-6) continue;
+    for (var j = 0; j < groupIdx.length; j++) {
+      if (Math.abs(residuals[j] - medR) > threshold * 1.4826 * mad) {
+        inlier[groupIdx[j]] = false;
+      }
+    }
+  }
+  return inlier;
+}
+
+function hweValidationMetrics(values, assignments, w) {
+  var predicted = assignments.map(function(n) { return n * w; });
+  var meanY = 0;
+  for (var i = 0; i < values.length; i++) meanY += values[i];
+  meanY /= values.length;
+  var ssRes = 0, ssTot = 0;
+  for (var i = 0; i < values.length; i++) {
+    ssRes += (values[i] - predicted[i]) * (values[i] - predicted[i]);
+    ssTot += (values[i] - meanY) * (values[i] - meanY);
+  }
+  var rSquared = ssTot > 0 ? 1 - ssRes / ssTot : 0;
+
+  var maxN = 0;
+  for (var i = 0; i < assignments.length; i++) { if (assignments[i] > maxN) maxN = assignments[i]; }
+  var errors = [];
+  for (var n = 1; n <= maxN; n++) {
+    var sum = 0, cnt = 0;
+    for (var i = 0; i < values.length; i++) {
+      if (assignments[i] === n) { sum += values[i]; cnt++; }
+    }
+    if (cnt < 2) continue;
+    var empirical = sum / cnt;
+    var theoretical = n * w;
+    errors.push(Math.abs(empirical - theoretical) / theoretical);
+  }
+  var harmonicScore = errors.length > 0 ? errors.reduce(function(a,b){return a+b;},0) / errors.length : 1;
+
+  var quality;
+  if (rSquared >= 0.85 && harmonicScore < 0.10) quality = 'alta';
+  else if (rSquared >= 0.70 && harmonicScore < 0.20) quality = 'media';
+  else if (rSquared >= 0.50) quality = 'baja';
+  else quality = 'insuficiente';
+
+  return { rSquared: rSquared, harmonicScore: harmonicScore, quality: quality };
+}
+
+function hweBootstrapCI(values, nBoot, ci) {
+  nBoot = nBoot || 200; ci = ci || 0.95;
+  var wEstimates = [];
+  for (var b = 0; b < nBoot; b++) {
+    var sample = [];
+    for (var i = 0; i < values.length; i++) {
+      sample.push(values[Math.floor(Math.random() * values.length)]);
+    }
+    var wInit = hweGridSearchW(sample, 100);
+    var res = hweIHO(sample, wInit);
+    wEstimates.push(res.w);
+  }
+  wEstimates.sort(function(a,b) { return a - b; });
+  var alpha = (1 - ci) / 2;
+  var lo = wEstimates[Math.floor(alpha * wEstimates.length)];
+  var hi = wEstimates[Math.floor((1 - alpha) * wEstimates.length)];
+  return { lo: lo, hi: hi };
+}
+
+function hweMedian(arr) {
+  var s = arr.slice().sort(function(a,b) { return a - b; });
+  var n = s.length;
+  return n % 2 === 0 ? (s[n/2-1] + s[n/2]) / 2 : s[Math.floor(n/2)];
+}
+
+// --- HWE Scatter Clustering ---
+function hweClusterPoints(filtered, tMin, tMax) {
+  var taraPts = [], weightPts = [];
+  for (var i = 0; i < filtered.length; i++) {
+    if (filtered[i].v >= tMin && filtered[i].v <= tMax) taraPts.push(filtered[i]);
+    else weightPts.push(filtered[i]);
+  }
+
+  // Compute tara median per day+device
+  var taraByDD = {};
+  for (var i = 0; i < taraPts.length; i++) {
+    var key = taraPts[i].day + '|' + taraPts[i].d;
+    if (!taraByDD[key]) taraByDD[key] = [];
+    taraByDD[key].push(taraPts[i].v);
+  }
+  var taraMedians = {};
+  for (var key in taraByDD) {
+    taraMedians[key] = hweMedian(taraByDD[key]);
+  }
+
+  // Correct weight points and group by day
+  var correctedByDay = {};
+  var correctedVals = new Array(weightPts.length);
+  for (var i = 0; i < weightPts.length; i++) {
+    var p = weightPts[i];
+    var key = p.day + '|' + p.d;
+    var taraM = taraMedians[key] || 0;
+    correctedVals[i] = p.v - taraM;
+    if (correctedVals[i] > 5) {
+      if (!correctedByDay[p.day]) correctedByDay[p.day] = [];
+      correctedByDay[p.day].push({idx: i, corrected: correctedVals[i]});
+    }
+  }
+
+  // Run HWE per day (fast: no bootstrap, no outliers)
+  var wPerDay = {};
+  var nMax = 0;
+  var assignments = new Array(weightPts.length).fill(-1);
+
+  var days = Object.keys(correctedByDay).sort();
+  for (var di = 0; di < days.length; di++) {
+    var day = days[di];
+    var dayPts = correctedByDay[day];
+    var values = dayPts.map(function(p) { return p.corrected; });
+
+    if (values.length < 5) {
+      for (var j = 0; j < dayPts.length; j++) {
+        assignments[dayPts[j].idx] = 1;
+      }
+      wPerDay[day] = values.length > 0 ? values.reduce(function(a,b){return a+b;},0) / values.length : 0;
+      if (1 > nMax) nMax = 1;
+      continue;
+    }
+
+    var wInit = hweGridSearchW(values, 200);
+    var nMaxDay = hweDetermineNMax(values, wInit);
+    var res = hweIHO(values, wInit, nMaxDay);
+    wPerDay[day] = res.w;
+    if (nMaxDay > nMax) nMax = nMaxDay;
+
+    for (var j = 0; j < dayPts.length; j++) {
+      assignments[dayPts[j].idx] = Math.max(1, Math.min(nMaxDay, Math.round(dayPts[j].corrected / res.w)));
+    }
+  }
+
+  return {
+    taraPts: taraPts,
+    weightPts: weightPts,
+    assignments: assignments,
+    wPerDay: wPerDay,
+    nMax: nMax,
+    correctedVals: correctedVals
+  };
+}
+
+function doRunHWE() {
+  var tMin = parseFloat(document.getElementById('taraMin').value);
+  var tMax = parseFloat(document.getElementById('taraMax').value);
+  var filtered = ALL_DATA.filter(function(p) { return selectedDays.has(p.day) && selectedDevices.has(p.d); });
+  var flockStart = document.getElementById('flockStart').value || ALL_DAYS[0];
+
+  if (filtered.length < 10) {
+    document.getElementById('hweSection').style.display = 'none';
+    document.getElementById('errorSection').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('loading').textContent = 'Calculando peso individual (HWE)...';
+  document.getElementById('loading').style.display = 'block';
+
+  function runHWEPipeline(pts, deviceName) {
+    var byDayDevice = {};
+    for (var i = 0; i < pts.length; i++) {
+      var key = pts[i].day + '|' + pts[i].d;
+      if (!byDayDevice[key]) byDayDevice[key] = [];
+      byDayDevice[key].push(pts[i]);
+    }
+
+    var correctedByDay = {};
+    for (var key in byDayDevice) {
+      var grp = byDayDevice[key];
+      var day = key.split('|')[0];
+      var tp = grp.filter(function(p) { return p.v >= tMin && p.v <= tMax; });
+      var tm = tp.length > 0 ? hweMedian(tp.map(function(p) { return p.v; })) : 0;
+      var wp = grp.filter(function(p) { return p.v < tMin || p.v > tMax; });
+      for (var j = 0; j < wp.length; j++) {
+        var corrected = wp[j].v - tm;
+        if (corrected > 5) {
+          if (!correctedByDay[day]) correctedByDay[day] = [];
+          correctedByDay[day].push(corrected);
+        }
+      }
+    }
+
+    var results = [];
+    var startD = new Date(flockStart + 'T00:00:00Z');
+    var days = Object.keys(correctedByDay).sort();
+
+    for (var di = 0; di < days.length; di++) {
+      var day = days[di];
+      var values = correctedByDay[day];
+      var d = new Date(day + 'T00:00:00Z');
+      var dayNum = Math.floor((d - startD) / 86400000) + 1;
+
+      if (values.length < 5) {
+        results.push({ date: day, dayNum: dayNum, device: deviceName, W: null, W_lo: null, W_hi: null, quality: 'insuficiente', rSquared: 0, harmonicScore: 1, nMax: 0, nReadings: values.length, levelDetails: [] });
+        continue;
+      }
+
+      var wInit = hweGridSearchW(values);
+      var nMax = hweDetermineNMax(values, wInit);
+      var res = hweIHO(values, wInit, nMax);
+
+      var inlier = hweDetectOutliers(values, res.assignments, res.w);
+      var cleanValues = [];
+      for (var i = 0; i < values.length; i++) {
+        if (inlier[i]) cleanValues.push(values[i]);
+      }
+      if (cleanValues.length < 5) cleanValues = values;
+
+      res = hweIHO(cleanValues, res.w, nMax);
+
+      var wSum = 0, invNSum = 0;
+      for (var i = 0; i < cleanValues.length; i++) {
+        var ni = Math.max(1, Math.min(nMax, Math.round(cleanValues[i] / res.w)));
+        var wi = cleanValues[i] / ni;
+        wSum += wi * (1.0 / ni);
+        invNSum += 1.0 / ni;
+      }
+      var wWeighted = wSum / invNSum;
+
+      var finalAssignments = cleanValues.map(function(v) {
+        return Math.max(1, Math.min(nMax, Math.round(v / wWeighted)));
+      });
+
+      var metrics = hweValidationMetrics(cleanValues, finalAssignments, wWeighted);
+
+      var ci;
+      if (cleanValues.length >= 20 && metrics.quality !== 'insuficiente') {
+        ci = hweBootstrapCI(cleanValues, 200);
+      } else {
+        ci = { lo: wWeighted * 0.85, hi: wWeighted * 1.15 };
+      }
+
+      // Level details for error analysis
+      var levelDetails = [];
+      for (var n = 1; n <= nMax; n++) {
+        var levelVals = [];
+        for (var i = 0; i < cleanValues.length; i++) {
+          if (finalAssignments[i] === n) levelVals.push(cleanValues[i]);
+        }
+        if (levelVals.length === 0) continue;
+        var empirical = levelVals.reduce(function(a,b){return a+b;},0) / levelVals.length;
+        var theoretical = n * wWeighted;
+        var residuals = levelVals.map(function(v) { return v - theoretical; });
+        var mae = residuals.reduce(function(a,r){return a + Math.abs(r);},0) / residuals.length;
+        var mse = residuals.reduce(function(a,r){return a + r*r;},0) / residuals.length;
+        levelDetails.push({
+          level: n,
+          theoretical: Math.round(theoretical * 10) / 10,
+          empirical: Math.round(empirical * 10) / 10,
+          pctError: Math.round(Math.abs(empirical - theoretical) / theoretical * 10000) / 100,
+          mae: Math.round(mae * 10) / 10,
+          rmse: Math.round(Math.sqrt(mse) * 10) / 10,
+          nPts: levelVals.length
+        });
+      }
+
+      results.push({
+        date: day,
+        dayNum: dayNum,
+        device: deviceName,
+        W: Math.round(wWeighted * 100) / 100,
+        W_lo: Math.round(ci.lo * 100) / 100,
+        W_hi: Math.round(ci.hi * 100) / 100,
+        quality: metrics.quality,
+        rSquared: Math.round(metrics.rSquared * 10000) / 10000,
+        harmonicScore: Math.round(metrics.harmonicScore * 10000) / 10000,
+        nMax: nMax,
+        nReadings: cleanValues.length,
+        levelDetails: levelDetails
+      });
+    }
+    return results;
+  }
+
+  // Run combined (all devices)
+  var combinedResults = runHWEPipeline(filtered, 'Combinado');
+
+  // Run per device
+  var perDeviceResults = [];
+  var activeDevices = Array.from(selectedDevices).sort();
+  for (var di = 0; di < activeDevices.length; di++) {
+    var dev = activeDevices[di];
+    var devPts = filtered.filter(function(p) { return p.d === dev; });
+    if (devPts.length < 10) continue;
+    var devResults = runHWEPipeline(devPts, dev);
+    perDeviceResults = perDeviceResults.concat(devResults);
+  }
+
+  // Merge: combined first per day, then per-device
+  var allResults = [];
+  var daySet = new Set();
+  for (var i = 0; i < combinedResults.length; i++) daySet.add(combinedResults[i].date);
+  for (var i = 0; i < perDeviceResults.length; i++) daySet.add(perDeviceResults[i].date);
+  var allDays = Array.from(daySet).sort();
+
+  for (var di = 0; di < allDays.length; di++) {
+    var day = allDays[di];
+    for (var i = 0; i < combinedResults.length; i++) {
+      if (combinedResults[i].date === day) allResults.push(combinedResults[i]);
+    }
+    for (var i = 0; i < perDeviceResults.length; i++) {
+      if (perDeviceResults[i].date === day) allResults.push(perDeviceResults[i]);
+    }
+  }
+
+  renderHWEGrowthCurve(allResults, combinedResults, perDeviceResults);
+  renderErrorAnalysis(allResults);
+  document.getElementById('loading').style.display = 'none';
+}
+
+function renderHWEGrowthCurve(allResults, combinedResults, perDeviceResults) {
+  var section = document.getElementById('hweSection');
+  section.style.display = 'block';
+  var flockStart = document.getElementById('flockStart').value || ALL_DAYS[0];
+  var startD = new Date(flockStart + 'T00:00:00Z');
+
+  var qColors = { 'alta': '#2ecc71', 'media': '#f39c12', 'baja': '#e74c3c', 'insuficiente': '#95a5a6' };
+  var deviceColors = ['#e74c3c', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#8e44ad'];
+
+  // Combined trace
+  var valid = combinedResults.filter(function(r) { return r.W !== null; });
+  var dayNums = valid.map(function(r) { return r.dayNum; });
+  var ws = valid.map(function(r) { return r.W; });
+  var wLos = valid.map(function(r) { return r.W_lo; });
+  var wHis = valid.map(function(r) { return r.W_hi; });
+  var qualities = valid.map(function(r) { return r.quality; });
+  var dates = valid.map(function(r) { return r.date; });
+  var markerColors = qualities.map(function(q) { return qColors[q] || '#95a5a6'; });
+
+  var traces = [
+    {
+      x: dayNums, y: wHis, mode: 'lines', line: { width: 0 },
+      showlegend: false, hoverinfo: 'skip', type: 'scatter',
+    },
+    {
+      x: dayNums, y: wLos, mode: 'lines', line: { width: 0 },
+      fill: 'tonexty', fillcolor: 'rgba(52,152,219,0.15)',
+      name: 'IC 95%', hoverinfo: 'skip', type: 'scatter',
+    },
+    {
+      x: dayNums, y: ws, mode: 'markers+lines',
+      marker: { size: 12, color: markerColors, line: { color: 'white', width: 2 } },
+      line: { color: '#3498db', width: 3 },
+      name: 'Combinado',
+      text: dates.map(function(d, i) { return d + '<br>' + ws[i].toFixed(1) + 'g<br>Calidad: ' + qualities[i]; }),
+      hoverinfo: 'text',
+      type: 'scatter',
+    }
+  ];
+
+  // Per-device traces (hidden by default)
+  var deviceNames = {};
+  for (var i = 0; i < perDeviceResults.length; i++) {
+    deviceNames[perDeviceResults[i].device] = true;
+  }
+  var devList = Object.keys(deviceNames).sort();
+  for (var di = 0; di < devList.length; di++) {
+    var dev = devList[di];
+    var devValid = perDeviceResults.filter(function(r) { return r.device === dev && r.W !== null; });
+    if (devValid.length === 0) continue;
+    traces.push({
+      x: devValid.map(function(r) { return r.dayNum; }),
+      y: devValid.map(function(r) { return r.W; }),
+      mode: 'markers+lines',
+      marker: { size: 7, color: deviceColors[di % deviceColors.length] },
+      line: { color: deviceColors[di % deviceColors.length], width: 1, dash: 'dot' },
+      name: dev,
+      text: devValid.map(function(r) { return r.date + '<br>' + r.W.toFixed(1) + 'g<br>' + r.device; }),
+      hoverinfo: 'text',
+      type: 'scatter',
+      visible: 'legendonly',
+    });
+  }
+
+  var layout = {
+    xaxis: { title: 'Día del lote', gridcolor: 'rgba(0,0,0,0.05)' },
+    yaxis: { title: 'Peso estimado de 1 pollo (g)', gridcolor: 'rgba(0,0,0,0.08)' },
+    plot_bgcolor: 'white', paper_bgcolor: '#fafafa',
+    legend: { yanchor: 'top', y: 0.99, xanchor: 'left', x: 0.01 },
+    margin: { l: 60, r: 30, t: 20, b: 50 },
+  };
+
+  Plotly.newPlot('growthChart', traces, layout, { responsive: true });
+
+  // Table with "Báscula" column
+  var html = '<table class="hwe-table"><thead><tr>'
+    + '<th>Fecha</th><th>Día</th><th>Báscula</th><th>W (g)</th><th>IC 95%</th><th>Calidad</th><th>R²</th><th>Score</th><th>n_max</th><th>Lecturas</th>'
+    + '</tr></thead><tbody>';
+  for (var i = 0; i < allResults.length; i++) {
+    var r = allResults[i];
+    var wStr = r.W !== null ? r.W.toFixed(1) : 'N/A';
+    var icStr = r.W_lo !== null ? r.W_lo.toFixed(1) + ' - ' + r.W_hi.toFixed(1) : 'N/A';
+    var qClass = 'q-' + (r.quality || 'insuficiente');
+    var isCombined = r.device === 'Combinado';
+    var rowStyle = isCombined ? ' style="background:#f0f4f8;font-weight:500"' : '';
+    html += '<tr' + rowStyle + '><td>' + r.date + '</td><td>' + r.dayNum + '</td>'
+      + '<td>' + r.device + '</td>'
+      + '<td><b>' + wStr + '</b></td>'
+      + '<td>' + icStr + '</td>'
+      + '<td><span class="quality-badge ' + qClass + '">' + (r.quality || 'N/A') + '</span></td>'
+      + '<td>' + (r.rSquared ? r.rSquared.toFixed(3) : 'N/A') + '</td>'
+      + '<td>' + (r.harmonicScore !== undefined ? r.harmonicScore.toFixed(3) : 'N/A') + '</td>'
+      + '<td>' + (r.nMax || 0) + '</td>'
+      + '<td>' + (r.nReadings || 0) + '</td></tr>';
+  }
+  html += '</tbody></table>';
+  document.getElementById('hweTable').innerHTML = html;
+}
+
+function renderErrorAnalysis(allResults) {
+  var section = document.getElementById('errorSection');
+  section.style.display = 'block';
+
+  // Error table by level by day
+  var errorRows = [];
+  var empiricalX = [], empiricalY = [], empiricalColors = [], empiricalText = [];
+  var qColors = { 'alta': '#2ecc71', 'media': '#f39c12', 'baja': '#e74c3c', 'insuficiente': '#95a5a6' };
+
+  for (var i = 0; i < allResults.length; i++) {
+    var r = allResults[i];
+    if (!r.levelDetails || r.levelDetails.length === 0) continue;
+    for (var j = 0; j < r.levelDetails.length; j++) {
+      var ld = r.levelDetails[j];
+      errorRows.push({
+        date: r.date, device: r.device, W: r.W,
+        level: ld.level, theoretical: ld.theoretical, empirical: ld.empirical,
+        pctError: ld.pctError, mae: ld.mae, rmse: ld.rmse, nPts: ld.nPts,
+        quality: r.quality
+      });
+      empiricalX.push(ld.theoretical);
+      empiricalY.push(ld.empirical);
+      empiricalColors.push(qColors[r.quality] || '#95a5a6');
+      empiricalText.push(r.date + ' | ' + r.device + '<br>Nivel ' + ld.level + '<br>Teórico: ' + ld.theoretical + 'g<br>Empírico: ' + ld.empirical + 'g');
+    }
+  }
+
+  // Error table HTML
+  var html = '<table class="hwe-table"><thead><tr>'
+    + '<th>Fecha</th><th>Báscula</th><th>W (g)</th><th>Nivel</th><th>Teórico (g)</th><th>Empírico (g)</th><th>% Error</th><th>MAE (g)</th><th>RMSE (g)</th><th>n pts</th>'
+    + '</tr></thead><tbody>';
+  for (var i = 0; i < errorRows.length; i++) {
+    var er = errorRows[i];
+    var isCombined = er.device === 'Combinado';
+    var rowStyle = isCombined ? ' style="background:#f0f4f8"' : '';
+    html += '<tr' + rowStyle + '><td>' + er.date + '</td><td>' + er.device + '</td>'
+      + '<td>' + (er.W !== null ? er.W.toFixed(1) : 'N/A') + '</td>'
+      + '<td>' + er.level + '</td>'
+      + '<td>' + er.theoretical.toFixed(1) + '</td>'
+      + '<td>' + er.empirical.toFixed(1) + '</td>'
+      + '<td>' + er.pctError.toFixed(2) + '%</td>'
+      + '<td>' + er.mae.toFixed(1) + '</td>'
+      + '<td>' + er.rmse.toFixed(1) + '</td>'
+      + '<td>' + er.nPts + '</td></tr>';
+  }
+  html += '</tbody></table>';
+  document.getElementById('errorTable').innerHTML = html;
+
+  // Empirical vs Theoretical scatter (45° line)
+  if (empiricalX.length > 0) {
+    var minVal = Math.min.apply(null, empiricalX.concat(empiricalY)) * 0.9;
+    var maxVal = Math.max.apply(null, empiricalX.concat(empiricalY)) * 1.1;
+    var traces = [
+      {
+        x: [minVal, maxVal], y: [minVal, maxVal],
+        mode: 'lines', line: { color: '#bdc3c7', width: 2, dash: 'dash' },
+        name: 'Ajuste perfecto', showlegend: true, type: 'scatter',
+      },
+      {
+        x: empiricalX, y: empiricalY,
+        mode: 'markers',
+        marker: { size: 10, color: empiricalColors, line: { color: 'white', width: 1.5 } },
+        text: empiricalText, hoverinfo: 'text',
+        name: 'Datos', type: 'scatter',
+      }
+    ];
+    var layout = {
+      xaxis: { title: 'Peso teórico n×W (g)', gridcolor: 'rgba(0,0,0,0.05)' },
+      yaxis: { title: 'Media empírica (g)', gridcolor: 'rgba(0,0,0,0.08)' },
+      plot_bgcolor: 'white', paper_bgcolor: '#fafafa',
+      legend: { yanchor: 'top', y: 0.99, xanchor: 'left', x: 0.01 },
+      margin: { l: 60, r: 30, t: 20, b: 50 },
+    };
+    Plotly.newPlot('empiricalChart', traces, layout, { responsive: true });
+  }
+
+  // Global stats
+  var combinedResults = allResults.filter(function(r) { return r.device === 'Combinado' && r.W !== null; });
+  if (combinedResults.length > 0) {
+    var r2Vals = combinedResults.map(function(r) { return r.rSquared; });
+    var scoreVals = combinedResults.map(function(r) { return r.harmonicScore; });
+    var wVals = combinedResults.map(function(r) { return r.W; });
+    var avgR2 = r2Vals.reduce(function(a,b){return a+b;},0) / r2Vals.length;
+    var avgScore = scoreVals.reduce(function(a,b){return a+b;},0) / scoreVals.length;
+    var minW = Math.min.apply(null, wVals);
+    var maxW = Math.max.apply(null, wVals);
+
+    var problemDays = combinedResults.filter(function(r) { return r.quality === 'baja' || r.quality === 'insuficiente'; });
+
+    var statsHtml = '<div class="global-stat-card"><b>R² promedio</b>' + avgR2.toFixed(4) + '</div>'
+      + '<div class="global-stat-card"><b>Score armónico promedio</b>' + avgScore.toFixed(4) + '</div>'
+      + '<div class="global-stat-card"><b>Rango de W</b>' + minW.toFixed(1) + ' - ' + maxW.toFixed(1) + ' g</div>'
+      + '<div class="global-stat-card"><b>Días con problemas</b>'
+      + (problemDays.length > 0 ? problemDays.map(function(r) { return r.date + ' (' + r.quality + ')'; }).join(', ') : 'Ninguno')
+      + '</div>';
+    document.getElementById('globalStats').innerHTML = statsHtml;
+  }
+}
+
+// --- Chart ---
+function updateChart() {
+  document.getElementById('loading').style.display = 'block';
+  setTimeout(function() { doUpdate(); }, 50);
+}
+
+function adjustTara() {
+  var tMin = parseFloat(document.getElementById('taraMin').value);
+  var tMax = parseFloat(document.getElementById('taraMax').value);
+  var filtered = ALL_DATA.filter(function(p) { return selectedDays.has(p.day) && selectedDevices.has(p.d); });
+  var taraVals = filtered.filter(function(p) { return p.v >= tMin && p.v <= tMax; }).map(function(p) { return p.v; });
+  if (taraVals.length === 0) { alert('No hay puntos de tara en el rango definido.'); return; }
+  var sorted = taraVals.slice().sort(function(a,b) { return a - b; });
+  var n = sorted.length;
+  var median = n % 2 === 0 ? (sorted[n/2 - 1] + sorted[n/2]) / 2 : sorted[Math.floor(n/2)];
+  for (var i = 0; i < ALL_DATA.length; i++) {
+    ALL_DATA[i].v = Math.round((ALL_DATA[i].v - median) * 100) / 100;
+  }
+  updateChart();
+}
+
+function doUpdate() {
+  var tMin = parseFloat(document.getElementById('taraMin').value);
+  var tMax = parseFloat(document.getElementById('taraMax').value);
+  var filtered = ALL_DATA.filter(function(p) { return selectedDays.has(p.day) && selectedDevices.has(p.d); });
+
+  if (filtered.length === 0) {
+    Plotly.purge('chart');
+    document.getElementById('statsBar').innerHTML = '<div class="stat-card" style="border-color:#e74c3c">Sin datos para los días seleccionados</div>';
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('hweSection').style.display = 'none';
+    document.getElementById('errorSection').style.display = 'none';
+    return;
+  }
+
+  // Use HWE harmonic clustering
+  var hweResult = hweClusterPoints(filtered, tMin, tMax);
+  var taraPts = hweResult.taraPts;
+  var weightPts = hweResult.weightPts;
+  var assignments = hweResult.assignments;
+  var nMax = hweResult.nMax;
+
+  // Tara median
+  var taraMedianVal = 0;
+  if (taraPts.length > 0) {
+    taraMedianVal = hweMedian(taraPts.map(function(p) { return p.v; }));
+  }
+  document.getElementById('taraMedian').textContent = 'Mediana tara: ' + taraMedianVal.toFixed(2) + 'g';
+
+  var traces = [];
+  var tickvals = [], ticktext = [];
+
+  // Tara trace at position -1
+  var taraJitter = taraPts.map(function() { return -1 + (Math.random() - 0.5) * 0.7; });
+  traces.push({
+    x: taraJitter,
+    y: taraPts.map(function(p) { return p.v; }),
+    mode: 'markers',
+    type: 'scattergl',
+    marker: { size: 4, color: '#bdc3c7', opacity: 0.3 },
+    name: 'Tara (n=' + taraPts.length + ', med: ' + taraMedianVal.toFixed(1) + 'g)',
+    customdata: taraPts.map(function(p) { return [p.img, p.d, p.dt]; }),
+    hovertemplate: '<b>%{y:.1f} g</b><br>Báscula: %{customdata[1]}<br>Fecha: %{customdata[2]}<extra>Tara</extra>',
+  });
+  tickvals.push(-1);
+  ticktext.push('Tara<br>(n=' + taraPts.length + ')');
+
+  // Level traces (harmonic clusters)
+  for (var n = 1; n <= nMax; n++) {
+    var pts = [];
+    for (var j = 0; j < weightPts.length; j++) {
+      if (assignments[j] === n) pts.push(weightPts[j]);
+    }
+    if (pts.length === 0) continue;
+    var label = n === 1 ? '1 pollo' : n + ' pollos';
+    var jitterArr = pts.map(function() { return n + (Math.random() - 0.5) * 0.7; });
+    traces.push({
+      x: jitterArr,
+      y: pts.map(function(p) { return p.v; }),
+      mode: 'markers',
+      type: 'scattergl',
+      marker: { size: 4, color: COLORS[(n-1) % COLORS.length], opacity: 0.35 },
+      name: label + ' (n=' + pts.length + ')',
+      customdata: pts.map(function(p) { return [p.img, p.d, p.dt]; }),
+      hovertemplate: '<b>%{y:.1f} g</b><br>Báscula: %{customdata[1]}<br>Fecha: %{customdata[2]}<extra>%{fullData.name}</extra>',
+    });
+    tickvals.push(n);
+    ticktext.push(label + '<br>(n=' + pts.length + ')');
+  }
+
+  // Unassigned points
+  var unassigned = [];
+  for (var j = 0; j < weightPts.length; j++) {
+    if (assignments[j] === -1) unassigned.push(weightPts[j]);
+  }
+  if (unassigned.length > 0) {
+    var uPos = nMax + 1;
+    traces.push({
+      x: unassigned.map(function() { return uPos + (Math.random() - 0.5) * 0.7; }),
+      y: unassigned.map(function(p) { return p.v; }),
+      mode: 'markers',
+      type: 'scattergl',
+      marker: { size: 4, color: '#95a5a6', opacity: 0.3 },
+      name: 'Sin clasificar (n=' + unassigned.length + ')',
+      customdata: unassigned.map(function(p) { return [p.img, p.d, p.dt]; }),
+      hovertemplate: '<b>%{y:.1f} g</b><br>Báscula: %{customdata[1]}<br>Fecha: %{customdata[2]}<extra>Sin clasificar</extra>',
+    });
+    tickvals.push(uPos);
+    ticktext.push('Sin clasificar<br>(n=' + unassigned.length + ')');
+  }
+
+  var layout = {
+    xaxis: { title: 'Nivel (pollos)', tickvals: tickvals, ticktext: ticktext, gridcolor: 'rgba(0,0,0,0.05)' },
+    yaxis: { title: 'Peso (g)', gridcolor: 'rgba(0,0,0,0.08)' },
+    plot_bgcolor: 'white',
+    paper_bgcolor: '#fafafa',
+    hoverlabel: { bgcolor: 'white', font: { size: 13 } },
+    legend: { yanchor: 'top', y: 0.99, xanchor: 'right', x: 0.99, bgcolor: 'rgba(255,255,255,0.9)' },
+    margin: { l: 60, r: 30, t: 20, b: 60 },
+  };
+
+  Plotly.react('chart', traces, layout, { responsive: true });
+
+  // Stats - Tara
+  var statsHtml = '';
+  if (taraPts.length > 0) {
+    var taraSt = calcStats(taraPts.map(function(p) { return p.v; }));
+    statsHtml += '<div class="stat-card" style="border-color:#bdc3c7">'
+      + '<b>Tara</b> (' + taraPts.length + ' pts)'
+      + '<div class="stat-row">'
+      + '<span>Media: ' + taraSt.mean.toFixed(2) + 'g</span>'
+      + '<span>Mediana: ' + taraSt.median.toFixed(2) + 'g</span>'
+      + '<span>Desv. Est.: ' + taraSt.std.toFixed(2) + 'g</span>'
+      + '<span>Varianza: ' + taraSt.variance.toFixed(2) + '</span>'
+      + '<span>Rango: ' + taraSt.min.toFixed(1) + ' - ' + taraSt.max.toFixed(1) + 'g</span>'
+      + '</div></div>';
+  }
+
+  // Stats - Harmonic levels
+  for (var n = 1; n <= nMax; n++) {
+    var clusterVals = [];
+    for (var j = 0; j < weightPts.length; j++) {
+      if (assignments[j] === n) clusterVals.push(weightPts[j].v);
+    }
+    if (clusterVals.length === 0) continue;
+    var st = calcStats(clusterVals);
+    var label = n === 1 ? '1 pollo' : n + ' pollos';
+    statsHtml += '<div class="stat-card" style="border-color:' + COLORS[(n-1) % COLORS.length] + '">'
+      + '<b>' + label + '</b> (' + clusterVals.length + ' pts)'
+      + '<div class="stat-row">'
+      + '<span>Media: ' + st.mean.toFixed(2) + 'g</span>'
+      + '<span>Mediana: ' + st.median.toFixed(2) + 'g</span>'
+      + '<span>Desv. Est.: ' + st.std.toFixed(2) + 'g</span>'
+      + '<span>Varianza: ' + st.variance.toFixed(2) + '</span>'
+      + '<span>Rango: ' + st.min.toFixed(1) + ' - ' + st.max.toFixed(1) + 'g</span>'
+      + '</div></div>';
+  }
+  statsHtml += '<div class="stat-card" style="border-color:#95a5a6"><b>Total</b>: ' + filtered.length + ' pts (Tara: ' + taraPts.length + ' + Peso: ' + weightPts.length + ')</div>';
+  document.getElementById('statsBar').innerHTML = statsHtml;
+
+  // Hover events
+  var plotDiv = document.getElementById('chart');
+  if (plotDiv.removeAllListeners) {
+    plotDiv.removeAllListeners('plotly_hover');
+    plotDiv.removeAllListeners('plotly_unhover');
+  }
+  attachHover(plotDiv);
+  document.getElementById('loading').style.display = 'none';
+
+  // Auto-trigger HWE pipeline
+  setTimeout(function() { doRunHWE(); }, 100);
+}
+
+function attachHover(plotDiv) {
+  var tooltip = document.getElementById('image-tooltip');
+  var tooltipImg = document.getElementById('tooltip-img');
+  var tooltipWeight = document.getElementById('tooltip-weight');
+  var tooltipInfo = document.getElementById('tooltip-info');
+  var currentUrl = '';
+
+  plotDiv.on('plotly_hover', function(ev) {
+    var pt = ev.points[0];
+    if (!pt || !pt.customdata) return;
+    var imgUrl = pt.customdata[0], device = pt.customdata[1], fecha = pt.customdata[2];
+    tooltipWeight.textContent = pt.y.toFixed(1) + ' g';
+    tooltipInfo.textContent = device + ' | ' + fecha;
+    if (imgUrl && imgUrl !== currentUrl) {
+      currentUrl = imgUrl; tooltipImg.src = imgUrl; tooltipImg.style.display = 'block';
+    } else if (!imgUrl) {
+      tooltipImg.style.display = 'none'; currentUrl = '';
+    }
+    tooltip.style.display = 'block';
+  });
+
+  plotDiv.on('plotly_unhover', function() {
+    tooltip.style.display = 'none';
+  });
+}
+
+document.addEventListener('mousemove', function(e) {
+  var tooltip = document.getElementById('image-tooltip');
+  if (tooltip.style.display === 'block') {
+    var x = e.clientX + 20, y = e.clientY - 10;
+    if (x + 380 > window.innerWidth) x = e.clientX - 390;
+    if (y + 420 > window.innerHeight) y = window.innerHeight - 430;
+    if (y < 10) y = 10;
+    tooltip.style.left = x + 'px'; tooltip.style.top = y + 'px';
+  }
+});
+
+// Allow Enter key on token input
+document.getElementById('inputToken').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') fetchData();
+});
+</script>
+</body>
+</html>
